@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# Notebooks kept local only (folder preserved as empty placeholder)
+notebooks/*
+!notebooks/.gitkeep
+
+# Old plain-text reports kept local only (folder preserved empty)
+report/legacy/*
+!report/legacy/.gitkeep
+
+# Claude / local agent files
+.claude/
+
+# PyTorch
+*.pth
+*.pt
+*.onnx
+
+# Data (folder preserved as empty placeholder)
+data/*
+!data/.gitkeep
+dataset/
+*.dcm
+*.npy
+*.npz
+
+# Outputs
+outputs/
+checkpoints/
+figures/
+results/
+predictions/
+
+# Logs (folder preserved as empty placeholder)
+logs/*
+!logs/.gitkeep
+
+# Report: only the output figures are tracked. The LaTeX source, compiled PDF,
+# and figure-generation script are kept local only.
+report/*
+!report/figures/
+!report/figures/**
+!report/legacy/
+report/legacy/*
+!report/legacy/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+venv/
+env/
+ENV/
+.venv

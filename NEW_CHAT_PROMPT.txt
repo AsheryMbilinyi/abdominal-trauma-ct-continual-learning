@@ -1,0 +1,211 @@
+## Context
+
+I am working on a MICAD 2026 paper titled:
+"Mitigating Catastrophic Forgetting in CT-Based Abdominal-Trauma Detection:
+A Comparison of EWC, Experience Replay, and Their Combination"
+
+The paper studies continual learning on the RSNA 2023 Abdominal Trauma Detection dataset.
+The existing GitHub repo implements 4 continual learning methods (Baseline, EWC, Replay,
+EWC+Replay) across two experimental settings:
+- Class-incremental (CI): Task 1 = class 0 only, Task 2 = class 1 only, shared softmax head
+- Domain-incremental (DI): 3 CT window tasks (Brain WL=40/WW=80, Lung WL=-600/WW=1500,
+  SoftTissue WL=50/WW=400), both classes per task
+
+================================================================================
+REVIEWER COMMENTS
+================================================================================
+
+Reviewer 1:
+Given the large difference between the reported runs, particularly for Replay, multi-seed
+experiments are needed to determine whether the conclusions about EWC, Replay and LwF are
+stable. The authors should also distinguish more carefully between catastrophic forgetting
+and failure to learn the original or new task, especially when performance remains near
+chance. The class-incremental use of a shared softmax head may itself produce label
+competition, so comparisons with separate heads or a multi-label formulation would
+strengthen the interpretation.
+
+Reviewer 2:
+The current evidence is still somewhat preliminary. Most experiments use a single seeded
+run, while the differences between Run A and Run B suggest considerable instability. Please
+repeat the main comparisons with several seeds and report mean values with standard
+deviations or confidence intervals. It would also be useful to include a joint-training
+upper bound and a separate-head baseline, so that the effect of continual learning can be
+separated from the conflict introduced by the shared classifier.
+
+================================================================================
+CRITICAL RULE: DO NOT TOUCH EXISTING REPO FILES
+================================================================================
+
+Do not modify any existing files from the original GitHub repo.
+Only create new files or modify the 4 newly created experiment files listed below.
+
+Existing repo files (DO NOT TOUCH):
+  src/stage1_cnn/exp1_class_incremental.py
+  src/stage1_cnn/exp2_window_domain.py
+  src/stage2_resnet18/exp1_ewc_sweep_lwf.py
+  src/stage3_mil/exp2_attention_mil.py
+  src/stage3_mil/tune_mil.py
+  src/config.py
+  src/utils.py
+  src/quickstart.py
+  src/archive/
+  make_synthetic_data.py
+
+================================================================================
+NEW FILES CREATED (these can be modified)
+================================================================================
+
+4 experiment files addressing reviewer comments:
+  src/experiments/multi_seed_ci.py             <- multi-seed runs, 3 seeds, 5 methods
+  src/experiments/joint_training_upper_bound.py <- oracle upper bound
+  src/experiments/separate_head_baseline.py    <- MultiHeadCNN vs SharedHeadCNN
+  src/experiments/near_chance_analysis.py      <- near-chance diagnostic, CI + DI
+
+Narval SLURM scripts:
+  scripts/setup_narval.sh
+  scripts/download_data.sh
+  scripts/preprocess_dicom.py      <- converts DICOM to PNG (256x256)
+  scripts/job_preprocess.sh        <- 8h SLURM job
+  scripts/job_multi_seed_ci.sh     <- 8h SLURM job, GPU A100
+  scripts/job_joint_training.sh    <- 4h SLURM job, GPU A100
+  scripts/job_separate_head.sh     <- 4h SLURM job, GPU A100
+  scripts/job_near_chance.sh       <- 6h SLURM job, GPU A100
+  scripts/submit_all.sh            <- submits all 4 at once
+
+Modified:
+  requirements.txt  <- added pydicom>=2.3.0
+
+================================================================================
+KEY DESIGN OF EACH NEW EXPERIMENT
+================================================================================
+
+multi_seed_ci.py:
+  - Seeds: [42, 123, 456] (configurable via SEEDS env var)
+  - Methods: Baseline, EWC, Replay, LwF, EWC+Replay
+  - Config: MAX_PER_CLASS=30, MAX_PER_PATIENT=5, ITERS_PER_TASK=200,
+            FISHER_SAMPLES=100, BUFFER_SIZE=100
+  - Outputs per-task accuracy (T1, T2) plus mean +/- std across seeds
+  - Supports DEBUG_RUN=1, DATA_DIR, LOG_DIR env vars
+
+joint_training_upper_bound.py:
+  - CI: trains on class 0+1 simultaneously, evaluates per class
+  - DI: ConcatDataset of 3 CT windows, evaluates per window
+  - Config: MAX_PER_CLASS=30, MAX_PER_PATIENT=5, EPOCHS=5
+  - Supports DEBUG_RUN=1, DATA_DIR, LOG_DIR env vars
+
+separate_head_baseline.py:
+  - MultiHeadCNN: shared backbone + per-task Linear(256->2) heads, frozen after each task
+  - SharedHeadCNN: same backbone + single shared head (existing design)
+  - Oracle evaluation uses task ID to select correct head
+  - Config: MAX_PER_CLASS=30, MAX_PER_PATIENT=5, ITERS_PER_TASK=200
+  - Supports DEBUG_RUN=1, DATA_DIR, LOG_DIR env vars
+
+near_chance_analysis.py:
+  - Runs all 5 CL methods, scans entries where final_acc <= 55%
+  - Runs fresh solo model for near-chance entries
+  - Verdicts: OK / Forgetting / CL Failure / Task Unlearnable
+  - Covers both CI and DI settings
+  - CHANCE_THRESHOLD configurable via env var (default 55%)
+  - Supports DEBUG_RUN=1, DATA_DIR, LOG_DIR env vars
+
+================================================================================
+DATA
+================================================================================
+
+Dataset: RSNA 2023 Abdominal Trauma Detection
+Expected structure:
+  data/
+    train.csv
+    RSNA2023ProcessedImages/
+      <patient_id>/
+        <series_id>/
+          *.png   <- 256x256 grayscale CT slices
+
+Label: any_injury (0=healthy, 1=injured), patient-level label stamped on every slice
+
+Synthetic data for smoke testing:
+  python make_synthetic_data.py
+
+================================================================================
+NARVAL HPC STATUS
+================================================================================
+
+Cluster:      Narval (Alliance Canada), NVIDIA A100 GPUs
+Account:      def-a2nyi4
+Project path: /project/def-a2nyi4/nidita/abdominal-trauma-ct-continual-learning
+Data path:    $SCRATCH/micad/data
+Venv:         /project/def-a2nyi4/nidita/abdominal-trauma-ct-continual-learning/venv
+
+Current data situation:
+  - Full 313 GB zip at $SCRATCH/micad/data/rsna-2023-abdominal-trauma-detection.zip
+  - ~1111 patients already extracted to $SCRATCH/micad/data/train_images/
+  - deprecated_files/train.csv extracted (has any_injury column)
+  - train.csv symlink needed:
+      ln -s $SCRATCH/micad/data/deprecated_files/train.csv $SCRATCH/micad/data/train.csv
+  - Data is DICOM format (.dcm) -- needs conversion to PNG before experiments
+
+What still needs to be done:
+  1. Extract 60 patients (30 per class) from zip (compute node job, ~30 min)
+  2. Convert DICOM to PNG: sbatch scripts/job_preprocess.sh
+  3. Submit experiments: bash scripts/submit_all.sh
+
+Command to extract just 60 needed patients:
+
+sbatch --account=def-a2nyi4 --time=01:00:00 --mem=16G --cpus-per-task=4 \
+  --job-name=extract_60pts --output=$SCRATCH/micad/extract_%j.out \
+  --wrap="
+source /project/def-a2nyi4/nidita/abdominal-trauma-ct-continual-learning/venv/bin/activate
+python3 - <<'PYEOF'
+import pandas as pd, subprocess, random
+from pathlib import Path
+
+data = Path('$SCRATCH/micad/data')
+zipf = data / 'rsna-2023-abdominal-trauma-detection.zip'
+csv  = data / 'deprecated_files/train.csv'
+
+df = pd.read_csv(csv)
+by_class = {}
+for _, r in df[['patient_id','any_injury']].dropna().iterrows():
+    by_class.setdefault(int(r.any_injury), []).append(int(r.patient_id))
+
+random.seed(42)
+selected = []
+for lbl, pids in sorted(by_class.items()):
+    random.shuffle(pids)
+    chosen = pids[:30]
+    selected.extend(chosen)
+    print(f'Class {lbl}: {len(chosen)} patients')
+
+print(f'Extracting {len(selected)} patients...')
+for pid in selected:
+    print(f'  patient {pid}')
+    subprocess.run(['unzip','-n','-q',str(zipf),
+        f'train_images/{pid}/*','-d',str(data)], check=False)
+print('Done')
+PYEOF
+"
+
+================================================================================
+ENVIRONMENT SETUP (already done)
+================================================================================
+
+On Narval login node:
+  module load python/3.11
+  module load gcc opencv
+  source venv/bin/activate
+  KAGGLE_TOKEN saved in ~/.bashrc
+  All job scripts include: module load gcc opencv
+
+================================================================================
+KEY TECHNICAL NOTES
+================================================================================
+
+- Shared head label competition: shared softmax pushed entirely toward one class per task
+  -- this is the main forgetting cause identified in the paper
+- Label noise: patient-level any_injury stamped on every slice
+- CT windowing: Brain(WL=40,WW=80), Lung(WL=-600,WW=1500), SoftTissue(WL=50,WW=400)
+- AMP: enabled when CUDA available
+- All 4 new files support: DEBUG_RUN=1, DATA_DIR, LOG_DIR, FORCE_CPU, FORCE_CUDA env vars
+- Smoke test: DEBUG_RUN=1 python src/experiments/multi_seed_ci.py (~2 min with synthetic data)
+- preprocess_dicom.py stores PNGs with soft tissue window as default (WL=40, WW=400)
+  and saves as 8-bit PNG -- HU values are NOT preserved (implementation ambiguity noted)

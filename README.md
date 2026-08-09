@@ -39,7 +39,14 @@ each script's location tells you where it's reported.
 │   ├── config.py                      # central experiment configuration + presets
 │   ├── utils.py                       # helpers
 │   └── quickstart.py                  # scaffold (does not load data)
+└── scripts/
+    ├── download_data.sh               # fetches the Kaggle competition data
+    └── preprocess_dicom.py            # converts DICOM -> windowed PNGs
 ```
+
+`data/`, `logs/`, `notebooks/`, and `report/` are created locally as needed
+(data downloads, run outputs, notebooks, report drafts) and are not tracked
+in the repo.
 
 ## Data layout
 
@@ -50,6 +57,13 @@ data/
   RSNA2023ProcessedImages/<patient_id>/<series_id>/<instance>.png
   train.csv               # labels; uses the `any_injury` column
   image_level_labels.csv
+```
+
+Two scripts help build this layout from the raw Kaggle competition data:
+
+```bash
+DATA_DIR=./data bash scripts/download_data.sh   # downloads + unzips the DICOM dataset
+DATA_DIR=./data python scripts/preprocess_dicom.py  # converts DICOM -> windowed PNGs
 ```
 
 ## Running the experiments

@@ -33,6 +33,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -437,14 +438,23 @@ log('-'*70)
 
 rows = []
 for method in ('MultiHead', 'SharedHead'):
-    avg_accs   = [all_results[s][method]['metrics']['avg_accuracy'] for s in SEEDS]
+    avg_accs    = [all_results[s][method]['metrics']['avg_accuracy'] for s in SEEDS]
     forgettings = [all_results[s][method]['metrics']['forgetting']   for s in SEEDS]
     m_acc, s_acc = np.mean(avg_accs),    np.std(avg_accs)
     m_fgt, s_fgt = np.mean(forgettings), np.std(forgettings)
-    log(f'{method:<18} {m_acc:6.2f} +/- {s_acc:.2f}%   {m_fgt:6.2f} +/- {s_fgt:.2f}%')
+    n = len(SEEDS)
+    sem_acc = stats.sem(avg_accs)
+    sem_fgt = stats.sem(forgettings)
+    ci_acc = (m_acc, m_acc) if sem_acc == 0 else stats.t.interval(0.95, df=n-1, loc=m_acc, scale=sem_acc)
+    ci_fgt = (m_fgt, m_fgt) if sem_fgt == 0 else stats.t.interval(0.95, df=n-1, loc=m_fgt, scale=sem_fgt)
+    ci_acc = (max(0.0, ci_acc[0]), min(100.0, ci_acc[1]))
+    ci_fgt = (max(0.0, ci_fgt[0]), min(100.0, ci_fgt[1]))
+    log(f'{method:<18} {m_acc:6.2f} +/- {s_acc:.2f}%  95% CI [{ci_acc[0]:.2f}, {ci_acc[1]:.2f}]'
+        f'   Fgt: {m_fgt:.2f} +/- {s_fgt:.2f}%  95% CI [{ci_fgt[0]:.2f}, {ci_fgt[1]:.2f}]')
     for i, seed in enumerate(SEEDS):
         rows.append({'Method': method, 'Seed': seed,
-                     'Avg_Accuracy': avg_accs[i], 'Forgetting': forgettings[i]})
+                     'Avg_Accuracy': avg_accs[i], 'Forgetting': forgettings[i],
+                     'CI95_Lo': ci_acc[0], 'CI95_Hi': ci_acc[1]})
 
 # Forgetting reduction
 mh_fgts = [all_results[s]['MultiHead']['metrics']['forgetting']  for s in SEEDS]

@@ -17,6 +17,7 @@ source "$SLURM_SUBMIT_DIR/venv/bin/activate"
 
 export DATA_DIR="$SCRATCH/micad/data"
 export LOG_DIR="$SCRATCH/micad/logs"
+export SEEDS=42,123,456,789,1024
 mkdir -p "$LOG_DIR"
 
 # ── run ───────────────────────────────────────────────────────────────────────

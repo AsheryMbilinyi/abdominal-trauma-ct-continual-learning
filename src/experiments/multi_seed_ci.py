@@ -24,6 +24,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -468,6 +469,14 @@ for method in METHODS:
     m_acc, s_acc = np.mean(avg_accs),    np.std(avg_accs)
     m_fgt, s_fgt = np.mean(forgettings), np.std(forgettings)
 
+    n = len(SEEDS)
+    sem_acc = stats.sem(avg_accs)
+    sem_fgt = stats.sem(forgettings)
+    ci_acc = (m_acc, m_acc) if sem_acc == 0 else stats.t.interval(0.95, df=n-1, loc=m_acc, scale=sem_acc)
+    ci_fgt = (m_fgt, m_fgt) if sem_fgt == 0 else stats.t.interval(0.95, df=n-1, loc=m_fgt, scale=sem_fgt)
+    ci_acc = (max(0.0, ci_acc[0]), min(100.0, ci_acc[1]))
+    ci_fgt = (max(0.0, ci_fgt[0]), min(100.0, ci_fgt[1]))
+
     # Per-task final accuracy: shows class-specific collapse e.g. [0%, 100%]
     task_means = []
     for t in range(NUM_TASKS):
@@ -475,7 +484,9 @@ for method in METHODS:
         task_means.append(np.mean(task_accs))
     task_str = '  '.join(f'T{t+1}={task_means[t]:.1f}%' for t in range(NUM_TASKS))
 
-    log(f'{method:<18} {m_acc:6.2f} +/- {s_acc:.2f}%   {m_fgt:6.2f} +/- {s_fgt:.2f}%   [{task_str}]')
+    log(f'{method:<18} {m_acc:6.2f} +/- {s_acc:.2f}%  95% CI [{ci_acc[0]:.2f}, {ci_acc[1]:.2f}]'
+        f'   Fgt: {m_fgt:.2f} +/- {s_fgt:.2f}%  95% CI [{ci_fgt[0]:.2f}, {ci_fgt[1]:.2f}]'
+        f'   [{task_str}]')
 
     for i, seed in enumerate(SEEDS):
         row = {'Method': method, 'Seed': seed,
@@ -487,7 +498,9 @@ for method in METHODS:
     agg_row = {
         'Method': method,
         'Avg_Acc_Mean': m_acc, 'Avg_Acc_Std': s_acc,
+        'Avg_Acc_CI95_Lo': ci_acc[0], 'Avg_Acc_CI95_Hi': ci_acc[1],
         'Forgetting_Mean': m_fgt, 'Forgetting_Std': s_fgt,
+        'Forgetting_CI95_Lo': ci_fgt[0], 'Forgetting_CI95_Hi': ci_fgt[1],
         'Num_Seeds': len(SEEDS),
     }
     for t in range(NUM_TASKS):

@@ -121,3 +121,7 @@ If you use this code, please cite the paper (MICAD 2026):
   year      = {2026}
 }
 ```
+
+## License
+
+Released under the [MIT License](LICENSE).
